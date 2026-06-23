@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMMS v3 — Scanner Kantin</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+/* ══ RESET & BASE ═══════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:#0F172A;color:#fff}
+button{cursor:pointer;font:inherit;border:none;background:none}
+
+/* ══ LAYOUT ════════════════════════════════════════════════ */
+#app{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 0 32px}
+
+/* ══ HEADER ════════════════════════════════════════════════ */
+.hdr{width:100%;background:linear-gradient(135deg,#052E16,#14532D);
+     padding:14px 20px;display:flex;align-items:center;gap:12px;
+     box-shadow:0 2px 16px rgba(0,0,0,.4);position:sticky;top:0;z-index:10}
+.hdr-logo{width:40px;height:40px;background:#22C55E;border-radius:10px;
+          display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.hdr-title h1{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.hdr-title p{font-size:11px;color:rgba(255,255,255,.6)}
+.hdr-clock{margin-left:auto;text-align:right}
+.hdr-clock .time{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.hdr-clock .date{font-size:10px;color:rgba(255,255,255,.6)}
+
+/* ══ SETUP BANNER ══════════════════════════════════════════ */
+#setup-banner{width:100%;max-width:520px;margin:18px 16px 0;padding:14px 16px;
+  background:rgba(234,179,8,.12);border:1.5px solid rgba(234,179,8,.35);
+  border-radius:12px;font-size:12px;line-height:1.7;color:#FDE68A}
+#setup-banner code{background:rgba(255,255,255,.1);padding:1px 6px;border-radius:4px;font-size:11px}
+#setup-banner input{width:100%;padding:8px 10px;margin-top:8px;border-radius:8px;
+  border:1.5px solid rgba(234,179,8,.5);background:rgba(255,255,255,.07);
+  color:#fff;font-size:13px;outline:none}
+#setup-banner input::placeholder{color:rgba(255,255,255,.35)}
+#btn-save-url{margin-top:8px;width:100%;padding:9px;background:#22C55E;color:#fff;
+  border-radius:8px;font-size:13px;font-weight:700}
+
+/* ══ SCAN AREA ═════════════════════════════════════════════ */
+.scan-wrap{width:100%;max-width:520px;margin:18px 16px 0;display:flex;flex-direction:column;gap:12px}
+
+/* Meal time bar */
+.meal-bar{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);
+  border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.meal-bar i{color:#4ADE80;font-size:15px;flex-shrink:0}
+.meal-bar .meal-name{font-size:13px;font-weight:700;color:#4ADE80}
+.meal-bar .meal-time{font-size:11px;color:rgba(255,255,255,.5);margin-left:auto}
+.meal-bar.idle{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1)}
+.meal-bar.idle i{color:rgba(255,255,255,.3)}
+.meal-bar.idle .meal-name{color:rgba(255,255,255,.5)}
+
+/* Camera */
+.cam-card{background:#111827;border-radius:14px;overflow:hidden;position:relative}
+
+/* Permission gate */
+#cam-gate{position:absolute;inset:0;background:rgba(10,15,26,.95);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:24px;text-align:center;z-index:5}
+.gate-icon{width:64px;height:64px;background:rgba(34,197,94,.12);border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+.gate-icon i{font-size:26px;color:#4ADE80}
+.gate-title{font-size:15px;font-weight:700}
+.gate-sub{font-size:12px;color:rgba(255,255,255,.5);max-width:280px;line-height:1.6}
+#btn-cam-gate{background:#22C55E;color:#fff;border-radius:10px;padding:11px 26px;
+  font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+#cam-gate-err{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+  border-radius:8px;padding:10px 12px;font-size:11px;color:#FCA5A5;
+  text-align:left;max-width:300px;line-height:1.6}
+
+/* Video */
+#sc-vid{width:100%;display:block;max-height:340px;object-fit:cover}
+#sc-cvs{display:none}
+
+/* Scan frame overlay */
+.scan-frame{position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;pointer-events:none}
+.frame-box{width:200px;height:200px;position:relative}
+.frame-box .corner{position:absolute;width:32px;height:32px}
+.corner.tl{top:0;left:0;border-top:3px solid #22C55E;border-left:3px solid #22C55E;border-radius:4px 0 0 0}
+.corner.tr{top:0;right:0;border-top:3px solid #22C55E;border-right:3px solid #22C55E;border-radius:0 4px 0 0}
+.corner.bl{bottom:0;left:0;border-bottom:3px solid #22C55E;border-left:3px solid #22C55E;border-radius:0 0 0 4px}
+.corner.br{bottom:0;right:0;border-bottom:3px solid #22C55E;border-right:3px solid #22C55E;border-radius:0 0 4px 0}
+.scan-line{position:absolute;left:3px;right:3px;height:2px;
+  background:linear-gradient(90deg,transparent,#22C55E,transparent);
+  animation:scanLine 2s linear infinite}
+@keyframes scanLine{0%{top:3px}50%{top:calc(100% - 5px)}100%{top:3px}}
+
+/* Status badge */
+#sc-st{position:absolute;bottom:10px;left:10px;background:rgba(15,23,42,.75);
+  color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;
+  backdrop-filter:blur(4px);z-index:4}
+
+/* Cam controls */
+.cam-controls{display:flex;gap:8px;padding:10px}
+.cam-btn{flex:1;padding:9px 0;border-radius:8px;font-size:12.5px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.cam-btn.primary{background:#22C55E;color:#fff}
+.cam-btn.primary:hover{background:#16A34A}
+.cam-btn.secondary{background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.1)}
+.cam-btn.secondary:hover{background:rgba(255,255,255,.14)}
+.cam-btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+
+/* Manual input */
+#manual-wrap{display:none;padding:12px}
+#manual-input{width:100%;padding:10px 12px;background:rgba(255,255,255,.06);
+  border:1.5px solid rgba(255,255,255,.12);border-radius:8px;color:#fff;
+  font-family:monospace;font-size:11.5px;resize:vertical;outline:none;min-height:60px}
+#manual-input:focus{border-color:#22C55E}
+#btn-manual-scan{margin-top:8px;width:100%;padding:10px;background:#22C55E;
+  color:#fff;border-radius:8px;font-size:13px;font-weight:700}
+
+/* ══ RESULT CARD ═══════════════════════════════════════════ */
+#result-card{border-radius:14px;overflow:hidden;transition:all .3s}
+.result-idle{background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);
+  padding:32px 20px;text-align:center}
+.result-idle i{font-size:40px;color:rgba(255,255,255,.08);display:block;margin-bottom:10px}
+.result-idle p{font-size:12px;color:rgba(255,255,255,.3)}
+
+.result-ok{background:linear-gradient(135deg,#052E16,#064E3B);
+  border:2px solid #22C55E;animation:cardIn .35s ease}
+.result-fail{background:linear-gradient(135deg,#1C0000,#300000);
+  border:2px solid #EF4444;animation:cardIn .35s ease}
+.result-warn{background:linear-gradient(135deg,#1C1200,#2D1F00);
+  border:2px solid #F59E0B;animation:cardIn .35s ease}
+@keyframes cardIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+
+.res-header{padding:16px 18px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid rgba(255,255,255,.08)}
+.res-badge{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:20px;flex-shrink:0}
+.badge-ok  {background:rgba(34,197,94,.2)}
+.badge-fail{background:rgba(239,68,68,.2)}
+.badge-warn{background:rgba(245,158,11,.2)}
+.res-status{font-size:15px;font-weight:800;letter-spacing:.3px}
+.res-status.ok  {color:#4ADE80}
+.res-status.fail{color:#F87171}
+.res-status.warn{color:#FCD34D}
+.res-msg{font-size:11.5px;color:rgba(255,255,255,.5);margin-top:2px}
+
+.res-body{padding:14px 18px}
+.emp-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.emp-av{width:48px;height:48px;border-radius:50%;background:#22C55E;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:900;flex-shrink:0}
+.emp-name{font-size:15px;font-weight:700}
+.emp-sub{font-size:11px;color:rgba(255,255,255,.5)}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.info-box{background:rgba(255,255,255,.06);border-radius:8px;padding:9px 10px}
+.info-lbl{font-size:9.5px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.info-val{font-size:13px;font-weight:700}
+.big-status{font-size:22px;font-weight:900;text-align:center;padding:14px 0;letter-spacing:.5px}
+.big-status.ok  {color:#4ADE80}
+.big-status.fail{color:#F87171}
+.big-status.warn{color:#FCD34D}
+.trx-id{text-align:center;font-size:10px;color:rgba(255,255,255,.25);font-family:monospace;padding-bottom:4px}
+
+/* ══ STATS ═════════════════════════════════════════════════ */
+.stats-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;padding:14px}
+.stats-title{font-size:11px;font-weight:700;color:rgba(255,255,255,.4);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat-item{text-align:center;background:rgba(255,255,255,.04);border-radius:8px;padding:10px 4px}
+.stat-val{font-size:22px;font-weight:900}
+.stat-lbl{font-size:9.5px;color:rgba(255,255,255,.4);margin-top:2px;font-weight:600}
+
+/* ══ TOAST ════════════════════════════════════════════════ */
+#toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:999}
+.toast{background:#1E293B;border:1px solid rgba(255,255,255,.1);border-radius:10px;
+  padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;
+  box-shadow:0 4px 20px rgba(0,0,0,.4);min-width:220px;
+  animation:toastIn .2s ease}
+@keyframes toastIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.out{animation:toastOut .2s ease forwards}
+@keyframes toastOut{to{transform:translateX(110%);opacity:0}}
+.toast.g i{color:#4ADE80}.toast.r i{color:#F87171}.toast.w i{color:#FCD34D}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-logo"><i class="fas fa-utensils"></i></div>
+    <div class="hdr-title">
+      <h1>EMMS Scanner</h1>
+      <p>Scan QR tanpa login</p>
+    </div>
+    <div class="hdr-clock">
+      <div class="time" id="clk">--:--:--</div>
+      <div class="date" id="clkd">--</div>
+    </div>
+  </div>
+
+  <!-- Setup banner (shown if GAS URL not configured) -->
+  <div id="setup-banner" class="scan-wrap" style="margin-bottom:0">
+    <div><i class="fas fa-cog"></i> <strong>Setup Pertama</strong></div>
+    <div>Masukkan URL deployment Google Apps Script Anda:<br>
+    (Salin dari GAS → Deploy → Manage Deployments → URL)</div>
+    <input type="url" id="gas-url-input" placeholder="https://script.google.com/macros/s/xxx/exec">
+    <button id="btn-save-url"><i class="fas fa-save"></i> Simpan &amp; Mulai</button>
+  </div>
+
+  <!-- Main scanner area (hidden until GAS URL set) -->
+  <div class="scan-wrap" id="main-wrap" style="display:none">
+
+    <!-- Meal schedule bar -->
+    <div class="meal-bar idle" id="meal-bar">
+      <i class="fas fa-clock"></i>
+      <span class="meal-name" id="meal-name">Memuat jadwal...</span>
+      <span class="meal-time" id="meal-time"></span>
+    </div>
+
+    <!-- Camera card -->
+    <div class="cam-card">
+      <!-- Permission gate -->
+      <div id="cam-gate">
+        <div class="gate-icon"><i class="fas fa-camera"></i></div>
+        <div class="gate-title">Izinkan Akses Kamera</div>
+        <div class="gate-sub">Klik tombol di bawah, lalu pilih <strong>Allow / Izinkan</strong> saat Chrome meminta izin kamera.</div>
+        <button id="btn-cam-gate"><i class="fas fa-video"></i> Aktifkan Kamera</button>
+        <div id="cam-gate-err"></div>
+      </div>
+
+      <!-- Video -->
+      <video id="sc-vid" autoplay playsinline muted></video>
+      <canvas id="sc-cvs"></canvas>
+
+      <!-- Frame overlay -->
+      <div class="scan-frame">
+        <div class="frame-box">
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+
+      <!-- Status badge -->
+      <div id="sc-st">&#9203; Kamera belum aktif</div>
+
+      <!-- Controls -->
+      <div class="cam-controls">
+        <button class="cam-btn primary" id="btn-start"><i class="fas fa-camera"></i> Mulai</button>
+        <button class="cam-btn secondary" id="btn-stop" disabled><i class="fas fa-stop"></i> Stop</button>
+        <button class="cam-btn secondary" id="btn-flip"><i class="fas fa-sync-alt"></i> Flip</button>
+        <button class="cam-btn secondary" id="btn-manual-tog"><i class="fas fa-keyboard"></i> Manual</button>
+      </div>
+
+      <!-- Manual input -->
+      <div id="manual-wrap">
+        <textarea id="manual-input" placeholder='Paste payload QR di sini: {"employee_id":"EMP001","token":"xxx","version":"2"}'></textarea>
+        <button id="btn-manual-scan"><i class="fas fa-check"></i> Proses QR</button>
+      </div>
+    </div>
+
+    <!-- Result card -->
+    <div id="result-card">
+      <div class="result-idle">
+        <i class="fas fa-qrcode"></i>
+        <p>Arahkan QR Card karyawan ke kamera</p>
+      </div>
+    </div>
+
+    <!-- Today stats -->
+    <div class="stats-card">
+      <div class="stats-title">Statistik Hari Ini &nbsp;
+        <button onclick="loadStats()" style="color:rgba(255,255,255,.35);font-size:10px"><i class="fas fa-sync-alt"></i> refresh</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-val" id="st-appr" style="color:#4ADE80">-</div><div class="stat-lbl">Approved</div></div>
+        <div class="stat-item"><div class="stat-val" id="st-rej"  style="color:#F87171">-</div><div class="stat-lbl">Ditolak</div></div>
+        <div class="stat-item"><div class="stat-val" id="st-uniq" style="color:#60A5FA">-</div><div class="stat-lbl">Karyawan</div></div>
+        <div class="stat-item"><div class="stat-val" id="st-tot"  style="color:rgba(255,255,255,.6)">-</div><div class="stat-lbl">Total</div></div>
+      </div>
+    </div>
+
+  </div><!-- /main-wrap -->
+</div><!-- /app -->
+
+<div id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════════
+var GAS_URL = localStorage.getItem('emms_gas_url') || '';
+
+// ══ INIT ════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function(){
+  startClock();
+  if(GAS_URL){
+    document.getElementById('gas-url-input').value = GAS_URL;
+    showMain();
+  }
+
+  document.getElementById('btn-save-url').onclick = function(){
+    var v = document.getElementById('gas-url-input').value.trim();
+    if(!v || !v.startsWith('https://script.google.com/')){
+      toast('Masukkan URL GAS yang valid (https://script.google.com/...)', 'w'); return;
+    }
+    GAS_URL = v;
+    localStorage.setItem('emms_gas_url', v);
+    showMain();
+    toast('URL disimpan!', 'g');
+  };
+
+  document.getElementById('btn-cam-gate').onclick    = startScan;
+  document.getElementById('btn-start').onclick       = startScan;
+  document.getElementById('btn-stop').onclick        = stopScan;
+  document.getElementById('btn-flip').onclick        = function(){ _fc=_fc==='environment'?'user':'environment'; stopScan(); setTimeout(startScan,400); };
+  document.getElementById('btn-manual-tog').onclick  = toggleManual;
+  document.getElementById('btn-manual-scan').onclick = doManScan;
+});
+
+function showMain(){
+  document.getElementById('setup-banner').style.display = 'none';
+  document.getElementById('main-wrap').style.display = 'flex';
+  document.getElementById('main-wrap').style.flexDirection = 'column';
+  document.getElementById('main-wrap').style.gap = '12px';
+  loadMealInfo();
+  loadStats();
+  checkCamPermission();
+}
+
+// ══ CLOCK ═══════════════════════════════════════════════
+function startClock(){
+  function upd(){
+    var n=new Date();
+    var cl=document.getElementById('clk'), cd=document.getElementById('clkd');
+    if(cl) cl.textContent=n.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    if(cd) cd.textContent=n.toLocaleDateString('id-ID',{weekday:'short',day:'2-digit',month:'short'});
+    setTimeout(upd,1000);
+  }upd();
+}
+
+// ══ GAS API (GET with URL params — works cross-origin) ════
+async function gasCall(params){
+  var url = GAS_URL + '?' + Object.keys(params).map(function(k){
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+  var resp = await fetch(url, {redirect:'follow'});
+  return resp.json();
+}
+
+// ══ MEAL INFO ════════════════════════════════════════════
+function loadMealInfo(){
+  gasCall({action:'getKantinStatus'}).then(function(r){
+    var bar  = document.getElementById('meal-bar');
+    var name = document.getElementById('meal-name');
+    var time = document.getElementById('meal-time');
+    if(!r||!r.ok){ if(bar)bar.className='meal-bar idle'; if(name)name.textContent='Gagal memuat jadwal'; return; }
+    if(r.current_meal){
+      if(bar) bar.className = 'meal-bar';
+      if(name) name.textContent = 'Waktu Makan: ' + r.current_meal;
+      (r.schedules||[]).forEach(function(sc){
+        if(sc.meal_type===r.current_meal && time) time.textContent = sc.start_time+' - '+sc.end_time;
+      });
+    } else {
+      if(bar) bar.className = 'meal-bar idle';
+      if(name){ name.textContent='Tidak ada jadwal makan aktif'; name.style.color='rgba(255,255,255,.4)'; }
+    }
+  }).catch(function(){ });
+  setTimeout(loadMealInfo, 60000);
+}
+
+// ══ STATS ════════════════════════════════════════════════
+function loadStats(){
+  gasCall({action:'getTxStats'}).then(function(r){
+    if(!r||!r.ok) return;
+    var s=r.stats||{};
+    var sv=function(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; };
+    sv('st-appr', s.approved||0);
+    sv('st-rej',  s.failed||0);
+    sv('st-uniq', s.unique||0);
+    sv('st-tot',  s.total||0);
+  }).catch(function(){});
+}
+
+// ══ CAMERA ══════════════════════════════════════════════
+var _sa=false, _ss=null, _sl=null, _sp=null, _sc=false, _fc='environment';
+
+function checkCamPermission(){
+  if(!navigator.permissions) return;
+  navigator.permissions.query({name:'camera'}).then(function(status){
+    if(status.state==='granted'){ startScan(); }
+    else if(status.state==='denied'){
+      showGateErr('Izin kamera diblokir. Klik ikon kamera/gembok di address bar → Site settings → Camera → Allow, lalu refresh.');
+    }
+    // 'prompt': wait for user click — gate stays visible
+  }).catch(function(){});
+}
+
+async function startScan(){
+  if(_sa) return;
+  document.getElementById('cam-gate').style.display='none';
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showGateErr('Browser tidak mendukung kamera. Gunakan Chrome terbaru.');
+    return;
+  }
+  var gBtn = document.getElementById('btn-cam-gate');
+  if(gBtn){ gBtn.disabled=true; gBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Menunggu...'; }
+  setScSt('&#9203; Meminta izin kamera...');
+  try{
+    try{ _ss=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:_fc},width:{ideal:1280},height:{ideal:720}}}); }
+    catch(e1){
+      if(e1.name==='OverconstrainedError'){ _ss=await navigator.mediaDevices.getUserMedia({video:true}); }
+      else throw e1;
+    }
+    var v=document.getElementById('sc-vid');
+    v.srcObject=_ss; await v.play();
+    _sa=true;
+    document.getElementById('btn-start').disabled=true;
+    document.getElementById('btn-stop').disabled=false;
+    setScSt('&#128994; Kamera Aktif — Siap Scan');
+    scanLoop();
+  } catch(e){
+    if(gBtn){ gBtn.disabled=false; gBtn.innerHTML='<i class="fas fa-video"></i> Coba Lagi'; }
+    document.getElementById('cam-gate').style.display='flex';
+    var msgs={
+      NotAllowedError:  'Izin ditolak. Klik ikon kamera di address bar → Camera → Allow, lalu klik Coba Lagi.',
+      PermissionDeniedError: 'Izin ditolak. Klik ikon kamera di address bar → Camera → Allow, lalu klik Coba Lagi.',
+      NotFoundError:    'Tidak ada kamera. Pastikan kamera terpasang dan tidak dinonaktifkan.',
+      NotReadableError: 'Kamera dipakai aplikasi lain (Zoom/Meet). Tutup aplikasi tersebut dulu.',
+      SecurityError:    'Halaman harus dibuka via HTTPS. GitHub Pages sudah HTTPS — pastikan URL benar.',
+    };
+    showGateErr(msgs[e.name] || 'Kamera error ('+e.name+'). Gunakan mode Manual sebagai alternatif.');
+    setScSt('&#128308; Kamera tidak tersedia');
+  }
+}
+
+function stopScan(){
+  _sa=false;
+  if(_sl){cancelAnimationFrame(_sl);_sl=null;}
+  if(_ss){_ss.getTracks().forEach(function(t){t.stop();});_ss=null;}
+  var v=document.getElementById('sc-vid'); if(v)v.srcObject=null;
+  document.getElementById('btn-start').disabled=false;
+  document.getElementById('btn-stop').disabled=true;
+  document.getElementById('cam-gate').style.display='flex';
+  var gBtn=document.getElementById('btn-cam-gate');
+  if(gBtn){gBtn.disabled=false;gBtn.innerHTML='<i class="fas fa-video"></i> Aktifkan Kamera';}
+  document.getElementById('cam-gate-err').style.display='none';
+  setScSt('&#9899; Kamera Stop');
+}
+
+function showGateErr(msg){
+  var el=document.getElementById('cam-gate-err');
+  if(el){el.style.display='block';el.innerHTML='<i class="fas fa-exclamation-triangle"></i> '+msg;}
+}
+
+function setScSt(m){ var e=document.getElementById('sc-st'); if(e) e.innerHTML=m; }
+
+function scanLoop(){
+  var v=document.getElementById('sc-vid'), c=document.getElementById('sc-cvs');
+  if(!v||!c||!_sa) return;
+  var ctx=c.getContext('2d',{willReadFrequently:true});
+  function tick(){
+    if(!_sa) return;
+    try{
+      if(v.readyState>=2 && v.videoWidth>0){
+        c.width=v.videoWidth; c.height=v.videoHeight; ctx.drawImage(v,0,0);
+        if(typeof jsQR!=='undefined'){
+          var code=jsQR(ctx.getImageData(0,0,c.width,c.height).data,c.width,c.height,{inversionAttempts:'dontInvert'});
+          if(code&&code.data&&!_sc&&code.data!==_sp){
+            _sp=code.data; beep('scan'); doScan(code.data);
+            _sc=true; setTimeout(function(){_sc=false;},4000);
+          }
+        }
+      }
+    }catch(ex){}
+    _sl=requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function toggleManual(){
+  var mw=document.getElementById('manual-wrap');
+  var cv=document.getElementById('sc-vid').parentElement;
+  var btn=document.getElementById('btn-manual-tog');
+  var showing=mw.style.display!=='none';
+  if(!showing){
+    stopScan();
+    mw.style.display='block';
+    btn.innerHTML='<i class="fas fa-camera"></i> Kamera';
+  } else {
+    mw.style.display='none';
+    btn.innerHTML='<i class="fas fa-keyboard"></i> Manual';
+    startScan();
+  }
+}
+
+function doManScan(){
+  var v=document.getElementById('manual-input').value.trim();
+  if(!v){toast('Masukkan payload QR terlebih dahulu','w');return;}
+  doScan(v);
+}
+
+// ══ SCAN LOGIC ══════════════════════════════════════════
+function doScan(qr){
+  setResultLoading();
+  gasCall({action:'scanQR', qr:qr, scanner:'GitHub Scanner', device:'Web'})
+    .then(function(r){ showResult(r); loadStats(); })
+    .catch(function(e){ showResult({ok:false,status:'SYS_ERROR',msg:'Koneksi gagal: '+(e.message||'?')}); });
+}
+
+function setResultLoading(){
+  document.getElementById('result-card').innerHTML =
+    '<div style="background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.08);border-radius:14px;padding:24px;text-align:center">' +
+    '<div style="width:36px;height:36px;border:4px solid rgba(255,255,255,.15);border-top-color:#22C55E;border-radius:50%;animation:sp .7s linear infinite;margin:auto 0 12px"></div>' +
+    '<p style="font-size:12px;color:rgba(255,255,255,.4)">Memvalidasi...</p></div>' +
+    '<style>@keyframes sp{to{transform:rotate(360deg)}}</style>';
+}
+
+var STATUS_MSG={
+  INVALID_FORMAT:'Format QR tidak valid',INVALID_QR:'QR tidak lengkap',
+  INVALID_TOKEN:'QR tidak valid atau kadaluarsa',NOT_FOUND:'Karyawan tidak terdaftar',
+  INACTIVE:'Karyawan tidak aktif',OUT_OF_SCHEDULE:'Bukan waktu makan',
+  NOT_ORDERED:'Tidak ada order makan',ALREADY_CLAIMED:'Makanan sudah diambil',
+  DOUBLE_SCAN:'Scan terlalu cepat',SYS_ERROR:'Error sistem'
+};
+
+function showResult(r){
+  var rc=document.getElementById('result-card');
+  if(r&&r.ok&&r.status==='APPROVED'){
+    beep('ok');
+    var e=r.emp||{};
+    var av=e.employee_name ? e.employee_name[0].toUpperCase() : '?';
+    rc.innerHTML=
+      '<div class="result-ok">' +
+      '<div class="res-header">' +
+        '<div class="res-badge badge-ok"><i class="fas fa-check-circle" style="color:#4ADE80;font-size:22px"></i></div>' +
+        '<div><div class="res-status ok">APPROVED</div><div class="res-msg">Scan berhasil · '+new Date().toLocaleTimeString('id-ID')+'</div></div>' +
+      '</div>' +
+      '<div class="res-body">' +
+        '<div class="emp-row">' +
+          '<div class="emp-av">'+esc(av)+'</div>' +
+          '<div><div class="emp-name">'+esc(e.employee_name||'-')+'</div>' +
+            '<div class="emp-sub">NIK: '+esc(e.nik||'-')+' &nbsp;|&nbsp; '+esc(r.dept_name||e.dept_id||'-')+'</div></div>' +
+        '</div>' +
+        '<div class="info-grid">' +
+          '<div class="info-box"><div class="info-lbl">Jenis Makan</div><div class="info-val">'+esc(r.mealType||'-')+'</div></div>' +
+          '<div class="info-box"><div class="info-lbl">Shift</div><div class="info-val">'+esc(e.shift_group||'-')+'</div></div>' +
+        '</div>' +
+        '<div class="big-status ok">&#x1F37D; SILAKAN AMBIL MAKANAN</div>' +
+        '<div class="trx-id">ID: '+esc(r.trxId||'-')+'</div>' +
+      '</div></div>';
+    setTimeout(resetResult, 10000);
+  } else {
+    beep('er');
+    var sk=r&&r.status?r.status:'SYS_ERROR';
+    var label=STATUS_MSG[sk]||'DITOLAK';
+    var cls=sk==='ALREADY_CLAIMED'||sk==='OUT_OF_SCHEDULE'?'warn':'fail';
+    var icn=sk==='ALREADY_CLAIMED'?'fa-ban':sk==='OUT_OF_SCHEDULE'?'fa-clock':'fa-times-circle';
+    var em=r&&r.emp?r.emp:{};
+    rc.innerHTML=
+      '<div class="result-'+cls+'">' +
+      '<div class="res-header">' +
+        '<div class="res-badge badge-'+cls+'"><i class="fas '+icn+'" style="font-size:22px;color:'+(cls==='warn'?'#FCD34D':'#F87171')+'"></i></div>' +
+        '<div><div class="res-status '+cls+'">'+esc(label)+'</div>' +
+          '<div class="res-msg">'+esc((r&&r.msg)||label)+'</div></div>' +
+      '</div>' +
+      (em.employee_name?
+        '<div class="res-body"><div class="emp-row">' +
+          '<div class="emp-av" style="background:'+(cls==='warn'?'#78350F':'#450A0A')+'">'+esc(em.employee_name[0])+'</div>' +
+          '<div><div class="emp-name">'+esc(em.employee_name)+'</div>' +
+            '<div class="emp-sub">'+esc(em.nik||em.employee_id||'')+'</div></div>' +
+        '</div></div>':'') +
+      '<div class="big-status '+cls+'">'+
+        (cls==='warn'?'&#x26A0;&#xFE0F;':'&#x274C;')+' '+(cls==='warn'?label.toUpperCase():'DITOLAK')+
+      '</div></div>';
+    setTimeout(resetResult, 7000);
+  }
+}
+
+function resetResult(){
+  _sp=null;
+  document.getElementById('result-card').innerHTML=
+    '<div class="result-idle"><i class="fas fa-qrcode"></i><p>Arahkan QR Card karyawan ke kamera</p></div>';
+}
+
+// ══ UTILS ════════════════════════════════════════════════
+function esc(s){ var d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
+
+function beep(t){
+  try{
+    var ac=new(window.AudioContext||window.webkitAudioContext)(),o=ac.createOscillator(),g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    if(t==='ok'){o.frequency.setValueAtTime(880,ac.currentTime);o.frequency.setValueAtTime(1100,ac.currentTime+.1);g.gain.setValueAtTime(.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.35);o.start();o.stop(ac.currentTime+.35);}
+    else if(t==='er'){o.frequency.setValueAtTime(280,ac.currentTime);g.gain.setValueAtTime(.4,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.4);o.start();o.stop(ac.currentTime+.4);}
+    else{o.frequency.setValueAtTime(600,ac.currentTime);g.gain.setValueAtTime(.15,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.12);o.start();o.stop(ac.currentTime+.12);}
+  }catch(e){}
+}
+
+function toast(msg,type,dur){
+  type=type||'n'; dur=dur||3500;
+  var el=document.createElement('div'); el.className='toast '+type;
+  var icons={g:'fa-check-circle',r:'fa-times-circle',w:'fa-exclamation-triangle',n:'fa-info-circle'};
+  el.innerHTML='<i class="fas '+(icons[type]||'fa-info-circle')+'"></i><span>'+esc(msg)+'</span>';
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(function(){el.classList.add('out');setTimeout(function(){el.remove();},220);},dur);
+}
+</script>
+</body>
+</html>
